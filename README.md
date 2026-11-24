@@ -1,141 +1,445 @@
-# FinControl — Etapas 1, 2 e 3
+# FinControl Dados
 
-MVP acadêmico Flutter para o titular autenticar-se, registrar e acompanhar uma autorização fictícia. A Etapa 2 acrescenta detalhes, revogação, expiração, histórico e sincronização financeira simulada.
+MVP acadêmico de governança, consentimento e proteção de dados financeiros, desenvolvido em Flutter com backend Supabase e PostgreSQL.
 
-## Pré-requisitos e segurança
+A solução permite que o titular simule a conexão de uma instituição financeira, autorize categorias de dados para uma finalidade e prazo determinados, acompanhe a vigência, consulte o histórico e revogue o consentimento. O projeto também demonstra direitos do titular, controle de acesso por função, mascaramento, criptografia em repouso e descarte controlado.
 
-- Flutter 3.41 ou compatível e Chrome ou Android configurado;
-- projeto Supabase de teste;
-- Supabase CLI apenas se quiser aplicar a migração pela linha de comando.
+> Todo o ambiente utiliza contas, instituições, saldos e transações fictícias. A biometria e a jornada Open Finance são simulações acadêmicas. Nenhuma instituição financeira real é acessada.
 
-Nunca use `service_role` no aplicativo. Ele recebe apenas a URL e a chave pública `anon`/publishable. `.env.example` é uma referência sem segredos; o app não lê esse arquivo e usa valores compilados por `--dart-define`.
+## Sumário
 
-## Preparar o Supabase
+1. [Principais recursos](#principais-recursos)
+2. [Tecnologias](#tecnologias)
+3. [Arquitetura](#arquitetura)
+4. [Estrutura do projeto](#estrutura-do-projeto)
+5. [Pré-requisitos](#pré-requisitos)
+6. [Configuração do Supabase](#configuração-do-supabase)
+7. [Configuração local](#configuração-local)
+8. [Execução](#execução)
+9. [Contas de teste](#contas-de-teste)
+10. [Testes e qualidade](#testes-e-qualidade)
+11. [Cenários de validação](#cenários-de-validação)
+12. [Segurança e privacidade](#segurança-e-privacidade)
+13. [Deploy Web com Docker e EasyPanel](#deploy-web-com-docker-e-easypanel)
+14. [Documentação acadêmica](#documentação-acadêmica)
+15. [Limitações](#limitações)
 
-1. Crie um projeto de teste.
-2. No SQL Editor, execute integralmente `supabase/migrations/202611240001_stage1.sql`. Com a CLI, a alternativa é `supabase link --project-ref SEU_REF` e `supabase db push`.
-   Se a Etapa 1 já estiver aplicada, execute em seguida `supabase/migrations/202611240002_stage2.sql`. As migrações devem ser aplicadas uma única vez e na ordem do nome do arquivo.
-   Para a Etapa 3, execute depois `supabase/migrations/202611240003_stage3.sql`.
-3. Em **Authentication > Users**, crie dois titulares fictícios. No ambiente usado nesta etapa foram criados `titular.a@gmail.com` e `titular.b@gmail.com`, com senhas distintas e e-mails confirmados. Não registre as senhas no repositório.
-4. Em **Project Settings > API**, copie a URL e a chave pública, nunca uma chave secreta.
+## Principais recursos
 
-A migração cria Banco Alfa e valida finalidade, categorias, prazo, estado inicial e versão do aceite. RLS permite ler apenas registros com `owner_id = auth.uid()` e inserir apenas em nome da própria conta. Não há política de alteração ou exclusão nesta etapa.
+### Autenticação e experiência
 
-A segunda migração remove a restrição de estado inicial que impediria mudanças legítimas e cria:
+- Login real com e-mail e senha pelo Supabase Auth.
+- Restauração automática da sessão.
+- Biometria visual simulada antes da autenticação.
+- Interface mobile first e responsiva para desktop.
+- Feedback visual de carregamento, sucesso, erro e confirmação.
+- Ícones Lucide e identidade visual baseada na marca FinControl.
 
-- histórico `authorization_events`, legível somente pelo titular;
-- revogação atômica, que altera o estado e registra o evento na mesma transação;
-- atualização de expirações pertencentes ao usuário autenticado;
-- sincronização simulada que valida titular, estado ativo e prazo no backend antes de retornar saldo fictício;
-- privilégios limitados às funções destinadas ao papel `authenticated`.
+### Jornada Open Finance simulada
 
-O painel atualiza silenciosamente a cada três segundos enquanto o aplicativo está ativo e também imediatamente ao voltar da criação ou dos detalhes. O temporizador é suspenso quando o aplicativo vai para segundo plano. A atualização manual por gesto ou pelo ícone permanece disponível como contingência.
+- Seleção do Banco Alfa fictício.
+- Simulação de redirecionamento, autorização, conexão segura e importação.
+- Avisos visíveis de que nenhuma instituição real é acessada.
+- Dados financeiros fictícios disponíveis somente após autorização válida.
 
-## Executar
+### Consentimento e controle do titular
+
+- Seleção de saldo, transações e dados da conta.
+- Finalidade obrigatória.
+- Prazo de validade configurável.
+- Revisão das escolhas antes do aceite.
+- Registro da versão do texto de consentimento.
+- Painel com autorizações ativas, revogadas e expiradas.
+- Atualização silenciosa do painel a cada três segundos.
+- Atualização manual por gesto ou botão.
+- Histórico de aceite, acesso, expiração e revogação.
+- Revogação com confirmação e bloqueio de novos acessos.
+
+### Direitos do titular
+
+- Pedidos de acesso, correção e exclusão.
+- Protocolo único para acompanhamento.
+- Estados enviado, em análise, concluído e recusado.
+- Política de privacidade disponível dentro do aplicativo.
+- Exclusão das autorizações e eventos quando o pedido de exclusão é concluído.
+- Preservação do protocolo como evidência mínima do atendimento.
+
+### Suporte e governança
+
+- Fila exclusiva para contas com papel `support`.
+- Verificação do papel no backend.
+- Identificador do titular mascarado.
+- Texto livre dos pedidos cifrado com AES-256.
+- Histórico protegido contra alteração e exclusão pelo cliente.
+
+## Tecnologias
+
+| Camada | Tecnologia |
+|---|---|
+| Interface | Flutter e Dart |
+| Design | Material 3 e Lucide Icons |
+| Autenticação | Supabase Auth |
+| API | PostgREST e funções RPC |
+| Banco de dados | PostgreSQL |
+| Autorização | Row Level Security e RBAC |
+| Criptografia | `pgcrypto` com AES-256 |
+| Hospedagem Web | Nginx em container Docker |
+| Deploy previsto | EasyPanel em VPS |
+
+## Arquitetura
+
+```text
+Navegador ou Android
+        |
+        v
+Flutter e Dart
+        |
+        | HTTPS com JWT
+        v
+Supabase Auth e PostgREST
+        |
+        v
+RLS, RBAC e funções RPC
+        |
+        v
+PostgreSQL e schema privado
+```
+
+O Flutter recebe somente a URL pública do Supabase e a chave pública `anon` ou publishable. A segurança não depende de esconder essa chave, pois aplicações Web sempre expõem os valores compilados ao cliente. A proteção é aplicada por RLS, privilégios mínimos e validações nas funções do banco.
+
+Nunca inclua no aplicativo:
+
+- `service_role`;
+- senha do PostgreSQL;
+- URL direta do banco;
+- segredo JWT;
+- chave de criptografia;
+- credenciais administrativas.
+
+## Estrutura do projeto
+
+```text
+lib/
+  config/       configuração pública e validações
+  models/       modelos de domínio
+  screens/      telas e fluxos da aplicação
+  services/     autenticação, consultas e RPCs
+  theme/        cores, tipografia e componentes
+  widgets/      componentes reutilizáveis
+
+supabase/
+  migrations/   schema, RLS, RBAC, histórico e criptografia
+  tests/        preparação controlada de cenários
+
+scripts/        testes de segurança pela API
+test/           testes automatizados Flutter
+docs/           documentação, evidências e pitch
+images/         identidade visual
+```
+
+Arquivos de deploy:
+
+- `Dockerfile` compila o Flutter e publica com Nginx.
+- `nginx.conf` configura SPA, cache, compactação e endpoint de saúde.
+- `.dockerignore` reduz o contexto enviado ao Docker.
+- `.gitignore` impede o versionamento de variáveis e arquivos sensíveis.
+
+## Pré-requisitos
+
+- Flutter 3.41 ou versão compatível.
+- Dart incluído no Flutter.
+- Chrome, Edge ou dispositivo Android.
+- Projeto Supabase de teste, hospedado ou self-hosted.
+- Git para controle de versão.
+- Docker apenas para validar ou publicar o container.
+
+Verifique o ambiente:
+
+```powershell
+flutter doctor
+flutter devices
+```
+
+## Configuração do Supabase
+
+### 1. Aplicar as migrações
+
+Execute os arquivos no SQL Editor uma única vez e na ordem indicada:
+
+1. `supabase/migrations/202611240001_stage1.sql`
+2. `supabase/migrations/202611240002_stage2.sql`
+3. `supabase/migrations/202611240003_stage3.sql`
+4. `supabase/migrations/202611240004_fix_pgcrypto_schema.sql`
+
+A primeira migração cria instituições, autorizações, validações e RLS. A segunda adiciona histórico, revogação, expiração e sincronização fictícia. A terceira adiciona pedidos do titular, RBAC, mascaramento e criptografia. A quarta garante compatibilidade com instalações em que `pgcrypto` fica no schema `extensions`.
+
+O SQL Editor normalmente executa com privilégio administrativo e pode ignorar RLS. Ele deve ser usado para aplicar migrações, mas não como evidência de isolamento entre titulares.
+
+### 2. Criar usuários fictícios
+
+Em **Authentication > Users**, crie e confirme:
+
+- uma conta para o titular A;
+- uma conta para o titular B;
+- uma conta de suporte.
+
+Use senhas distintas e fictícias. Não registre senhas no código, documentação, repositório ou capturas.
+
+### 3. Atribuir o papel de suporte
+
+Revise o e-mail de teste no arquivo abaixo e execute-o uma única vez:
+
+```text
+supabase/tests/stage3_assign_support.sql
+```
+
+A conta comum deve receber `is_support=false`. A conta autorizada deve receber `is_support=true`.
+
+## Configuração local
+
+Instale as dependências:
 
 ```powershell
 flutter pub get
-flutter run -d chrome --dart-define=SUPABASE_URL=https://SEU-PROJETO.supabase.co --dart-define=SUPABASE_ANON_KEY=SUA_CHAVE_PUBLICA
 ```
 
-Sem os valores, o app mostra uma orientação de configuração. O SDK do Supabase persiste a sessão, e o `AuthGate` reage à restauração e ao logout.
+Crie o arquivo `.env` a partir de `.env.example`:
 
-## Reproduzir o fluxo
+```env
+SUPABASE_URL=https://SEU-ENDERECO-PUBLICO
+SUPABASE_ANON_KEY=SUA-CHAVE-PUBLICA
+```
 
-1. Entre como A, crie uma autorização para Banco Alfa e confirme a revisão de instituição, finalidade, categorias, prazo e texto versão 1.0.
-2. Confirme o registro no painel; saia, entre novamente como A e confira a persistência.
-3. Entre como B e confirme que o painel não retorna o registro de A.
-4. Para testar personificação, use um cliente autenticado como B (não SQL Editor/service role) e envie um `insert` em `authorizations` com o UUID de A. O esperado é `new row violates row-level security policy`.
+O aplicativo não carrega `.env` em tempo de execução. Os valores são enviados ao compilador por `--dart-define`.
 
-O script abaixo automatiza esse teste sem imprimir ou armazenar a senha. Copie o UUID de A em **Authentication > Users** e execute:
+Os arquivos `.env`, `.env.test` e demais variações locais estão ignorados pelo Git. Apenas `.env.example`, sem valores reais, deve ser versionado.
+
+## Execução
+
+### PowerShell com `.env`
 
 ```powershell
-.\scripts\test_rls_impersonation.ps1 -UserAId 'UUID-DE-A'
+$finConfig = Get-Content .env | ConvertFrom-StringData
+
+flutter run -d chrome `
+  "--dart-define=SUPABASE_URL=$($finConfig.SUPABASE_URL)" `
+  "--dart-define=SUPABASE_ANON_KEY=$($finConfig.SUPABASE_ANON_KEY)"
 ```
 
-Informe a senha fictícia de B quando solicitada. O resultado esperado é `APROVADO` com HTTP 401 ou 403. O script não cria nenhum registro quando a política está correta.
+### Execução direta
 
-O SQL Editor normalmente ignora RLS por usar privilégios administrativos; não serve como evidência do bloqueio. Use o app, um cliente com JWT de usuário ou testes locais do Supabase.
+```powershell
+flutter run -d chrome `
+  --dart-define=SUPABASE_URL=https://SEU-ENDERECO-PUBLICO `
+  --dart-define=SUPABASE_ANON_KEY=SUA-CHAVE-PUBLICA
+```
 
-## Verificações locais
+Se a configuração estiver ausente ou inválida, o aplicativo apresenta uma orientação em vez de iniciar o cliente Supabase.
+
+## Contas de teste
+
+As contas abaixo foram criadas exclusivamente para avaliação acadêmica, com e-mails confirmados e dados fictícios:
+
+| Perfil | E-mail | Senha | Finalidade |
+|---|---|---|---|
+| Titular A | `titular.a@gmail.com` | `senha123` | criar autorizações, sincronizar, revogar e abrir pedidos |
+| Titular B | `titular.b@gmail.com` | `senha123` | validar o isolamento entre contas por RLS |
+| Suporte | `suporte.fincontrol@gmail.com` | `senha123` | validar RBAC, fila, mascaramento e atendimento |
+
+### Acesso do professor
+
+As três contas utilizam a senha acadêmica comum `senha123`. Essas credenciais pertencem exclusivamente ao ambiente de demonstração e não podem ser reutilizadas em contas pessoais ou ambientes com dados reais.
+
+Formato sugerido para o envio no Blackboard:
+
+```text
+FinControl Dados
+URL: https://SEU-DOMINIO
+
+Titular A
+E-mail: titular.a@gmail.com
+Senha: senha123
+
+Titular B
+E-mail: titular.b@gmail.com
+Senha: senha123
+
+Suporte
+E-mail: suporte.fincontrol@gmail.com
+Senha: senha123
+```
+
+Recomendações para a avaliação:
+
+- utilizar Titular A no fluxo principal;
+- utilizar Titular B para demonstrar que uma conta não visualiza os dados da outra;
+- utilizar Suporte apenas para abrir a fila e alterar pedidos de teste;
+- evitar concluir pedido de exclusão antes de finalizar a demonstração principal;
+- trocar ou desativar as senhas após o encerramento da avaliação.
+
+## Testes e qualidade
+
+Execute:
 
 ```powershell
 dart format --output=none --set-exit-if-changed lib test
-flutter analyze
-flutter test
+flutter analyze --no-pub
+flutter test --no-pub
 ```
 
-Resultados observados em 24/11/2026:
+Gere o build Web:
 
-- `flutter analyze --no-pub`: concluído, nenhum problema encontrado;
-- `flutter test --no-pub`: 2 testes executados, todos aprovados;
-- `flutter build web --no-pub` com configuração pública fictícia: compilação concluída em `build/web`;
-- conexão com o Supabase: `/auth/v1/settings` retornou HTTP 200 com a chave pública configurada;
-- validação manual informada pelo responsável pelo projeto: A autenticou e criou uma autorização para Banco Alfa; após sair e entrar novamente, a autorização permaneceu no painel; ao autenticar como B, a autorização de A não foi exibida;
-- validação manual informada pelo responsável pelo projeto: `scripts/test_rls_impersonation.ps1`, autenticado como B e tentando gravar com o UUID de A, retornou `APROVADO`; a política RLS bloqueou a criação em nome de outro titular;
-- a tentativa inicial conjunta de análise/teste foi interrompida após ficar sem progresso; as verificações foram então repetidas separadamente com os resultados acima.
+```powershell
+$finConfig = Get-Content .env | ConvertFrom-StringData
 
-Os três cenários integrados previstos para a Etapa 1 foram validados. A migração foi aplicada externamente ao ambiente local e seu funcionamento foi observado pelo fluxo do aplicativo; a Supabase CLI local continua indisponível. A pasta também ainda não é um repositório Git, portanto nenhum commit foi criado.
+flutter build web --release --no-pub `
+  "--dart-define=SUPABASE_URL=$($finConfig.SUPABASE_URL)" `
+  "--dart-define=SUPABASE_ANON_KEY=$($finConfig.SUPABASE_ANON_KEY)"
+```
 
-## Estrutura
+Resultados consolidados em 24/11/2026:
 
-- `lib/screens`: login, painel e criação/revisão;
-- `lib/services`: autenticação e persistência;
-- `lib/models` e `lib/config`: dados e configuração pública;
-- `supabase/migrations`: esquema, seed, validações e RLS.
-- `docs/technical_documentation.md`: arquitetura, ciclo de vida, CID, PbD, RIPD, contingência, PRI e War Room;
-- `docs/test_matrix.md`: rastreabilidade dos testes aprovados e pendentes;
-- `docs/pitch_alignment.md`: correções necessárias no pitch.
-- `docs/evidence_2026-11-24.md`: resultados realmente executados, sem segredos;
-- `docs/FinControl_Bloco3_Pitch_corrigido.pptx`: cópia do pitch alinhada ao MVP comprovado.
+- análise estática sem problemas;
+- sete testes automatizados aprovados;
+- build Web gerado com sucesso;
+- conexão HTTPS com o Auth confirmada;
+- 17 cenários funcionais e de segurança documentados.
 
-## Etapa 3 — configuração e validação
+Consulte os resultados detalhados em:
 
-A Etapa 3 implementa política de privacidade, pedidos de acesso/correção/exclusão, protocolo e situação, fila de suporte com RBAC e identificador mascarado. O texto livre do pedido é armazenado cifrado por AES-256 com `pgcrypto`. A chave é gerada no banco durante a migração, fica no schema `private` sem privilégios para `anon` ou `authenticated` e nunca é enviada ao Flutter.
+- `docs/test_matrix.md`
+- `docs/evidence_2026-11-24.md`
 
-Depois de aplicar a terceira migração:
+## Cenários de validação
 
-1. Em **Authentication > Users**, crie a conta fictícia `suporte.fincontrol@gmail.com`, com e-mail confirmado e senha de teste não registrada no repositório.
-2. Execute uma vez `supabase/tests/stage3_assign_support.sql` no SQL Editor para atribuir o papel.
-3. Como titular A, abra **Meus pedidos**, crie um pedido de exclusão com texto fictício e anote o protocolo.
-4. Entre como suporte, abra **Fila de suporte**, confirme que o titular aparece mascarado, passe o pedido para **Em análise** e depois conclua.
-5. Entre novamente como A: o pedido deve estar **Concluído** e as autorizações devem ter sido removidas. O protocolo permanece como evidência do atendimento.
-6. Como titular B, confirme que **Fila de suporte** não aparece. Uma chamada direta a `get_support_queue` também deve ser bloqueada pelo backend.
+### Fluxo principal
 
-Validações locais em 24/11/2026:
+1. Entre como titular A.
+2. Execute a biometria simulada.
+3. Conecte o Banco Alfa no fluxo Open Finance simulado.
+4. Escolha categorias, finalidade e validade.
+5. Revise e confirme.
+6. Sincronize os dados fictícios.
+7. Consulte o evento de acesso.
+8. Revogue a autorização.
+9. Confirme o estado revogado e o bloqueio da sincronização.
 
-- `flutter analyze --no-pub`: nenhum problema encontrado;
-- `flutter test --no-pub`: 7 testes aprovados;
-- `flutter build web --no-pub`: compilação concluída em `build/web`;
-- endpoint configurado do Supabase: esquema HTTPS e resposta HTTP 200 em `/auth/v1/settings` confirmados;
-- migração `202611240003_stage3.sql`: aplicada; as quatro RPCs foram confirmadas no schema exposto pela API;
-- criptografia em repouso e exclusão até a conclusão: validadas pela API em 24/11/2026 após aplicar `202611240004_fix_pgcrypto_schema.sql`; o titular recebeu HTTP 403 ao solicitar `encrypted_details`, o suporte viu apenas identificador mascarado, e concluir o pedido removeu as 4 autorizações fictícias de A mantendo o protocolo concluído.
-- RBAC do usuário comum: validado pela API em 24/11/2026; B recebeu `is_support=false` e HTTP 403 ao chamar a fila. A conta de suporte recebeu `is_support=true`.
+### Isolamento entre titulares
 
-## Próxima etapa (não implementada)
+1. Crie uma autorização como titular A.
+2. Saia e entre como titular B.
+3. Confirme que B não recebe autorização ou evento de A.
 
-A Etapa 4 foi executada em 24/11/2026: reconstrução após `flutter clean`, restauração de dependências, análise sem problemas, 7 testes aprovados, build Web concluído, integridade do histórico bloqueada com HTTP 403, varredura sem segredo materializado e indisponibilidade seguida de retomada HTTP 200. A matriz detalhada está em `docs/test_matrix.md`.
+Para testar tentativa de personificação pela API:
 
-A Etapa 5 possui documentação técnica e alinhamento do pitch em `docs/`. A cópia final do pitch deve usar somente os resultados aprovados na matriz.
+```powershell
+.\scripts\test_rls_impersonation.ps1 -UserAId 'UUID-FICTICIO-DE-A'
+```
 
-## Etapa 2 — estado da validação
+O script solicita a senha fictícia de B de forma interativa. O resultado esperado é `APROVADO` com HTTP 401 ou 403. Nenhum registro deve ser criado.
 
-Implementação local em 24/11/2026:
+### Expiração
 
-- `flutter analyze --no-pub`: nenhum problema encontrado;
-- `flutter test --no-pub`: 5 testes aprovados;
-- migração `202611240002_stage2.sql`: aplicada externamente; as RPCs e a coluna `revoked_at` foram confirmadas no schema exposto pela API;
-- revogação: validação manual informada pelo responsável pelo projeto; uma autorização ativa foi revogada e o novo estado foi observado no aplicativo;
-- sincronização simulada: validação manual informada pelo responsável pelo projeto; dados fictícios foram retornados para uma autorização ativa, o acesso apareceu no histórico e a autorização revogada não permitiu nova sincronização;
-- expiração: validação manual informada pelo responsável pelo projeto e comprovada visualmente; após vencer uma autorização ativa no ambiente de teste, o painel a atualizou automaticamente para **Expirada**.
+O arquivo `supabase/tests/stage2_expiration_setup.sql` altera somente a autorização ativa mais recente do titular de teste configurado. Use apenas em ambiente acadêmico.
 
-Com esses resultados, os cenários integrados previstos para a Etapa 2 foram concluídos: acesso simulado permitido somente para autorização ativa, bloqueio após revogação, transição para expirada, histórico e atualização automática do painel.
+Depois da preparação:
 
-Roteiro integrado após aplicar a migração:
+1. Reabra ou atualize o painel.
+2. Confirme o estado **Expirada**.
+3. Confirme que a sincronização está bloqueada.
+4. Consulte o evento de expiração.
 
-1. Abra uma autorização ativa, sincronize e confira os dados marcados como simulados e o evento no histórico.
-2. Revogue-a e confirme no painel o estado **Revogada** e, nos detalhes, que a sincronização não fica disponível.
-3. Crie uma autorização de teste, ajuste `valid_until` para o passado em ambiente controlado, reabra o painel e confirme **Expirada** e o bloqueio da sincronização.
-4. Entre como o outro titular e confirme que ele não vê a autorização nem seus eventos.
+### Direitos e suporte
 
-Para preparar o item 3 com dados de teste, execute uma única vez no SQL Editor o arquivo `supabase/tests/stage2_expiration_setup.sql`. Ele altera somente a autorização ativa mais recente de `titular.a@gmail.com`. Não use esse script em produção.
+1. Como titular, crie um pedido de acesso, correção ou exclusão.
+2. Anote o protocolo.
+3. Como usuário comum, confirme que a fila não aparece e a API retorna 403.
+4. Como suporte, abra a fila e confirme o identificador mascarado.
+5. Passe o pedido para análise.
+6. Conclua somente quando desejar executar o efeito correspondente.
+
+Um pedido de exclusão concluído remove autorizações e eventos do titular. Use esse cenário apenas quando a remoção fizer parte do teste.
+
+## Segurança e privacidade
+
+Controles implementados:
+
+- autenticação e sessão por JWT;
+- HTTPS entre cliente e backend;
+- RLS por `owner_id`;
+- RBAC para suporte;
+- constraints de finalidade, categoria, prazo e estado;
+- revogação e auditoria na mesma transação;
+- histórico sem permissão de alteração pelo cliente;
+- AES-256 no texto dos pedidos;
+- chave em schema privado;
+- mascaramento do identificador na fila;
+- bloqueio do acesso após revogação ou expiração;
+- arquivos sensíveis excluídos do Git e do contexto Docker.
+
+O identificador mascarado é uma representação pseudonimizada. Ele reduz exposição, mas não deve ser tratado como anonimização irreversível, pois o backend mantém vínculo com o titular.
+
+## Deploy Web com Docker e EasyPanel
+
+### Build local do container
+
+```powershell
+$finConfig = Get-Content .env | ConvertFrom-StringData
+
+docker build `
+  --build-arg "SUPABASE_URL=$($finConfig.SUPABASE_URL)" `
+  --build-arg "SUPABASE_ANON_KEY=$($finConfig.SUPABASE_ANON_KEY)" `
+  -t fincontrol-web .
+
+docker run --rm -p 8080:80 fincontrol-web
+```
+
+Acesse `http://localhost:8080`. O endpoint `http://localhost:8080/health` deve responder `ok`.
+
+### EasyPanel
+
+1. Crie um serviço do tipo App.
+2. Conecte o repositório Git.
+3. Selecione o builder Dockerfile.
+4. Use `/` como caminho de build e `Dockerfile` como arquivo.
+5. Configure `SUPABASE_URL` e `SUPABASE_ANON_KEY`.
+6. Exponha a porta interna 80.
+7. Associe o domínio e habilite HTTPS.
+8. Atualize `SITE_URL`, `GOTRUE_SITE_URL` e URLs permitidas do Auth self-hosted.
+9. Faça o deploy e valide `/health`.
+
+O domínio deve possuir registro DNS do tipo A apontando para o IP público da VPS.
+
+## Documentação acadêmica
+
+| Documento | Conteúdo |
+|---|---|
+| `docs/technical_documentation.md` | arquitetura, ciclo de vida, privacidade, RIPD, contingência, PRI, reprodução e testes |
+| `docs/test_matrix.md` | rastreabilidade dos 17 cenários |
+| `docs/evidence_2026-11-24.md` | resultados executados sem segredos |
+| `docs/pitch_alignment.md` | correções de compatibilidade entre MVP e pitch |
+| `docs/FinControl_Bloco3_Pitch_corrigido.pptx` | versão corrigida da apresentação |
+
+Antes da entrega, a documentação técnica deve receber nomes completos, matrículas, contribuições individuais, links, commit final e capturas indicadas na seção de evidências. O documento e os slides devem ser exportados em PDF conforme as instruções da atividade.
+
+## Limitações
+
+Este projeto não possui:
+
+- biometria real;
+- integração Open Finance real;
+- dados bancários reais;
+- publicação em lojas;
+- KMS ou HSM externo;
+- pentest independente;
+- monitoramento e resposta 24 horas;
+- SLA, RTO e RPO aprovados;
+- homologação jurídica ou regulatória.
+
+O MVP deve ser apresentado como protótipo acadêmico funcional com dados fictícios, classificado de forma conservadora como TRL 4 e potencialmente TRL 5 após reprodução em ambiente controlado.
+
+## Equipe
+
+Hélio, Kevilyn, Rodrigo, Thainá, Murillo e Marcelo.
+
+Antes da publicação final, substitua os primeiros nomes por nomes completos e inclua as matrículas e contribuições verdadeiras na documentação técnica.
